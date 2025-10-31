@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <!-- ✅ 新增 favicon -->
+  <!-- favicon -->
   <link href="https://res.cloudinary.com/dijzndzw2/image/upload/c_scale,w_180/v1757176751/logo-3_hddq08.png" rel="apple-touch-icon" sizes="180x180"/>
   <link href="https://res.cloudinary.com/dijzndzw2/image/upload/v1757176751/logo-3_hddq08.png" rel="shortcut icon"/>
-  <!-- ✅ favicon 結束 -->
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -171,17 +170,21 @@
       min-height:220px;
     }
 
-    /* ✅ 預覽縮圖區：改成顯示整張圖片，不裁切 */
+    /* ✅ 新版縮圖（不裁切 + 邊框跟著圖片寬度走） */
     .thumb-link{
-      /* 原本是 position:relative + padding-top:62% 來強制固定比例，會搭配 cover 導致裁切。
-         我們改成固定一個展示高度，並讓圖片以原比例縮放完整呈現。 */
-      position:relative;
-      width:100%;
-
-      min-height:240px;                 /* 可依需求調 200~260px，越大越接近原圖比例 */
-      display:flex;
+      /* 重要變更：
+         1. 不再 width:100%
+         2. 用 inline-flex，讓外框寬度跟內容圖寬度走
+         3. 限制最大高度 / 最大寬度，避免爆版
+      */
+      display:inline-flex;
       align-items:center;
       justify-content:center;
+
+      max-width:100%;
+      max-height:240px;
+      /* 不固定比例，不給 padding-top 技巧，讓它自然高度 */
+      /* 不用 min-height:240px，因為那會強迫一個大灰框 */
 
       border-radius:10px;
       overflow:hidden;
@@ -191,13 +194,14 @@
     }
 
     .thumb-img{
-      /* 原本是 position:absolute; inset:0; background-size:cover;
-         我們拿掉絕對定位，並用 contain，確保整張圖都出現。 */
-      width:100%;
-      height:100%;
-      background-size:contain;          /* 不裁切，整張塞進來 */
-      background-repeat:no-repeat;
-      background-position:center center;
+      /* 真的放 <img> 用這組: */
+      max-width:100%;
+      max-height:240px;
+      width:auto;
+      height:auto;
+      object-fit:contain;
+      display:block;
+      background:#f3f4f6;
     }
 
     .card-head{
@@ -242,7 +246,6 @@
       overflow:hidden;
     }
 
-    /* admin controls row in each card */
     .admin-controls{
       margin-top:10px;
       display:flex;
@@ -292,6 +295,7 @@
       color:var(--muted);
       font-size:14px;
     }
+
     @media(max-width:600px){
       .navrow{
         flex-direction:column;
@@ -310,7 +314,6 @@
   <div class="container">
     <div class="navrow">
       <div class="brand">
-        <img src="logo.png" alt="logo"/>
         <div>自然大叔｜作品清單</div>
       </div>
 
@@ -529,19 +532,18 @@
     return out;
   }
 
-  // 這邊是給按鈕用的 callback
   async function toggleVisible(slug, currentVisible){
     const wantHide = currentVisible !== false;
-    const nextVisible = !wantHide; // true -> false (隱藏), false -> true (取消隱藏)
+    const nextVisible = !wantHide;
     await apiToggleVisible(slug, nextVisible);
-    await load(); // reload 清單
+    await load();
   }
 
   async function deletePost(slug){
     const ok = confirm(`確定要永久刪除「${slug}」？\n此動作會刪除所有圖片與資料，且無法復原！`);
     if(!ok) return;
     await apiDeletePost(slug);
-    await load(); // reload 清單
+    await load();
   }
 
   function render(items){
@@ -573,16 +575,18 @@
       const card = document.createElement('article');
       card.className = 'card';
 
+      // 縮圖區：現在用 <img>，讓外框寬度跟圖片走
       const thumbLink = document.createElement('a');
       thumbLink.className = 'thumb-link';
       thumbLink.href = detailUrl;
 
-      const thumbImg = document.createElement('div');
-      thumbImg.className = 'thumb-img';
       if (thumbUrl){
-        thumbImg.style.backgroundImage = `url("${thumbUrl}")`;
+        const imgEl = document.createElement('img');
+        imgEl.className = 'thumb-img';
+        imgEl.src = thumbUrl;
+        imgEl.alt = it.title || it.slug || '';
+        thumbLink.appendChild(imgEl);
       }
-      thumbLink.appendChild(thumbImg);
       card.appendChild(thumbLink);
 
       const head = document.createElement('div');
@@ -617,7 +621,6 @@
       });
       card.appendChild(tagsWrap);
 
-      // 如果是隱藏（visible:false）並且已登入，顯示紅字提醒
       if(isLoggedIn() && it.visible === false){
         const hiddenNote = document.createElement('div');
         hiddenNote.style.fontSize = '12px';
@@ -627,12 +630,10 @@
         card.appendChild(hiddenNote);
       }
 
-      // ===== Admin controls in each card =====
       if(isLoggedIn()){
         const ctrl = document.createElement('div');
         ctrl.className = 'admin-controls';
 
-        // 切換顯示狀態按鈕
         const toggleBtn = document.createElement('button');
         toggleBtn.textContent = (it.visible === false) ? '取消隱藏' : '隱藏';
         toggleBtn.addEventListener('click', ()=>{
@@ -640,7 +641,6 @@
         });
         ctrl.appendChild(toggleBtn);
 
-        // 刪除按鈕
         const delBtn = document.createElement('button');
         delBtn.className = 'danger';
         delBtn.textContent = '刪除';
@@ -653,7 +653,6 @@
       listEl.appendChild(card);
     }
 
-    // 分頁控制
     const pager = document.getElementById('pager');
     pager.hidden = (totalPages <= 1);
     document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages}`;
@@ -673,8 +672,6 @@
       }
     };
   }
-
-  // ===== page lifecycle =====
 
   async function load(){
     try {
