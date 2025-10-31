@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<!-- ✅ 新增 favicon -->
-<link href="https://res.cloudinary.com/dijzndzw2/image/upload/c_scale,w_180/v1757176751/logo-3_hddq08.png" rel="apple-touch-icon" sizes="180x180"/>
-<link href="https://res.cloudinary.com/dijzndzw2/image/upload/v1757176751/logo-3_hddq08.png" rel="shortcut icon"/>
-<!-- ✅ favicon 結束 -->
+  <!-- ✅ 新增 favicon -->
+  <link href="https://res.cloudinary.com/dijzndzw2/image/upload/c_scale,w_180/v1757176751/logo-3_hddq08.png" rel="apple-touch-icon" sizes="180x180"/>
+  <link href="https://res.cloudinary.com/dijzndzw2/image/upload/v1757176751/logo-3_hddq08.png" rel="shortcut icon"/>
+  <!-- ✅ favicon 結束 -->
+
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#0f172a" />
@@ -169,22 +170,36 @@
       flex-direction:column;
       min-height:220px;
     }
+
+    /* ✅ 預覽縮圖區：改成顯示整張圖片，不裁切 */
     .thumb-link{
+      /* 原本是 position:relative + padding-top:62% 來強制固定比例，會搭配 cover 導致裁切。
+         我們改成固定一個展示高度，並讓圖片以原比例縮放完整呈現。 */
       position:relative;
       width:100%;
-      padding-top:62%;
+
+      min-height:240px;                 /* 可依需求調 200~260px，越大越接近原圖比例 */
+      display:flex;
+      align-items:center;
+      justify-content:center;
+
       border-radius:10px;
       overflow:hidden;
       background:#f3f4f6;
       border:1px solid var(--border);
       margin-bottom:10px;
     }
+
     .thumb-img{
-      position:absolute;
-      inset:0;
-      background-size:cover;
-      background-position:center;
+      /* 原本是 position:absolute; inset:0; background-size:cover;
+         我們拿掉絕對定位，並用 contain，確保整張圖都出現。 */
+      width:100%;
+      height:100%;
+      background-size:contain;          /* 不裁切，整張塞進來 */
+      background-repeat:no-repeat;
+      background-position:center center;
     }
+
     .card-head{
       display:flex;
       flex-wrap:wrap;
@@ -516,11 +531,8 @@
 
   // 這邊是給按鈕用的 callback
   async function toggleVisible(slug, currentVisible){
-    const wantHide = currentVisible !== false; 
-    // currentVisible === false 代表「目前是隱藏」，按鈕應該做的是取消隱藏 -> visible:true
-    // currentVisible !== false 代表「目前是公開」，按鈕應該做的是隱藏 -> visible:false
-
-    const nextVisible = !wantHide; // 如果現在是公開(true) -> nextVisible=false; 如果現在是隱藏(false) -> nextVisible=true
+    const wantHide = currentVisible !== false;
+    const nextVisible = !wantHide; // true -> false (隱藏), false -> true (取消隱藏)
     await apiToggleVisible(slug, nextVisible);
     await load(); // reload 清單
   }
@@ -564,6 +576,7 @@
       const thumbLink = document.createElement('a');
       thumbLink.className = 'thumb-link';
       thumbLink.href = detailUrl;
+
       const thumbImg = document.createElement('div');
       thumbImg.className = 'thumb-img';
       if (thumbUrl){
@@ -621,11 +634,7 @@
 
         // 切換顯示狀態按鈕
         const toggleBtn = document.createElement('button');
-        if (it.visible === false){
-          toggleBtn.textContent = '取消隱藏';
-        } else {
-          toggleBtn.textContent = '隱藏';
-        }
+        toggleBtn.textContent = (it.visible === false) ? '取消隱藏' : '隱藏';
         toggleBtn.addEventListener('click', ()=>{
           toggleVisible(slug, it.visible);
         });
