@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <!-- ✅ 新增 favicon -->
+  <!-- favicon -->
   <link href="https://res.cloudinary.com/dijzndzw2/image/upload/c_scale,w_180/v1757176751/logo-3_hddq08.png" rel="apple-touch-icon" sizes="180x180"/>
   <link href="https://res.cloudinary.com/dijzndzw2/image/upload/v1757176751/logo-3_hddq08.png" rel="shortcut icon"/>
-  <!-- ✅ favicon 結束 -->
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -161,6 +160,10 @@
       gap:16px;
       margin-top:20px;
     }
+
+    /* 卡片外觀：目前版是有 padding 的版本。
+       你如果有另外一份 styles.css 控制卡片貼邊，那邊也可以沿用。
+       這裡保留 padding:12px，不影響這次日期顯示的回復邏輯 */
     .card{
       background:var(--card);
       border:1px solid var(--border);
@@ -171,43 +174,39 @@
       min-height:220px;
     }
 
-    /* ✅ 預覽縮圖區：改成顯示整張圖片，不裁切 */
+    /* 預覽縮圖 */
     .thumb-link{
-      /* 原本是 position:relative + padding-top:62% 來強制固定比例，會搭配 cover 導致裁切。
-         我們改成固定一個展示高度，並讓圖片以原比例縮放完整呈現。 */
       position:relative;
       width:100%;
-
-      min-height:240px;                 /* 可依需求調 200~260px，越大越接近原圖比例 */
+      min-height:240px;
       display:flex;
       align-items:center;
       justify-content:center;
-
       border-radius:10px;
       overflow:hidden;
       background:#f3f4f6;
       border:1px solid var(--border);
       margin-bottom:10px;
     }
-
     .thumb-img{
-      /* 原本是 position:absolute; inset:0; background-size:cover;
-         我們拿掉絕對定位，並用 contain，確保整張圖都出現。 */
       width:100%;
       height:100%;
-      background-size:contain;          /* 不裁切，整張塞進來 */
+      background-size:contain;
       background-repeat:no-repeat;
       background-position:center center;
     }
 
+    /* 卡片 header（標題＋原本日期）
+       這裡我們把排版改成靠左，因為現在不會再把日期塞到右邊了 */
     .card-head{
       display:flex;
       flex-wrap:wrap;
-      align-items:baseline;
-      justify-content:space-between;
+      align-items:flex-start;
+      justify-content:flex-start;
       gap:4px 8px;
       margin-bottom:4px;
     }
+
     .title-link{
       font-size:15px;
       font-weight:600;
@@ -216,11 +215,14 @@
       line-height:1.3;
       word-break:break-word;
     }
+
+    /* 日期文字 class 還是保留，但之後不會 append 到卡片 */
     .date{
       font-size:12px;
       color:var(--muted);
       white-space:nowrap;
     }
+
     .tags{
       font-size:12px;
       display:flex;
@@ -242,7 +244,6 @@
       overflow:hidden;
     }
 
-    /* admin controls row in each card */
     .admin-controls{
       margin-top:10px;
       display:flex;
@@ -491,7 +492,7 @@
     }
   }
 
-  // ===== render / filters / pagination =====
+  // ===== filter/sort/pagination =====
 
   function applyFilters(items){
     const q = document.getElementById('q').value.trim().toLowerCase();
@@ -529,19 +530,19 @@
     return out;
   }
 
-  // 這邊是給按鈕用的 callback
+  // 切換隱藏 / 顯示
   async function toggleVisible(slug, currentVisible){
     const wantHide = currentVisible !== false;
-    const nextVisible = !wantHide; // true -> false (隱藏), false -> true (取消隱藏)
+    const nextVisible = !wantHide;
     await apiToggleVisible(slug, nextVisible);
-    await load(); // reload 清單
+    await load();
   }
 
   async function deletePost(slug){
     const ok = confirm(`確定要永久刪除「${slug}」？\n此動作會刪除所有圖片與資料，且無法復原！`);
     if(!ok) return;
     await apiDeletePost(slug);
-    await load(); // reload 清單
+    await load();
   }
 
   function render(items){
@@ -573,6 +574,7 @@
       const card = document.createElement('article');
       card.className = 'card';
 
+      // 縮圖
       const thumbLink = document.createElement('a');
       thumbLink.className = 'thumb-link';
       thumbLink.href = detailUrl;
@@ -585,6 +587,7 @@
       thumbLink.appendChild(thumbImg);
       card.appendChild(thumbLink);
 
+      // 卡片標題列（不再顯示日期）
       const head = document.createElement('div');
       head.className = 'card-head';
 
@@ -593,15 +596,17 @@
       titleA.href = detailUrl;
       titleA.textContent = it.title || it.slug || '未命名';
 
-      const dateSpan = document.createElement('span');
-      dateSpan.className = 'date';
-      const d = new Date(it.date || it.created_at || Date.now());
-      dateSpan.textContent = d.toLocaleDateString('zh-TW');
-
       head.appendChild(titleA);
-      head.appendChild(dateSpan);
+      // ⚠ 日期不再加入列表卡片
+      // const dateSpan = document.createElement('span');
+      // dateSpan.className = 'date';
+      // const d = new Date(it.date || it.created_at || Date.now());
+      // dateSpan.textContent = d.toLocaleDateString('zh-TW');
+      // head.appendChild(dateSpan);
+
       card.appendChild(head);
 
+      // tags
       const tagsWrap = document.createElement('div');
       tagsWrap.className = 'tags';
       const tagList = Array.isArray(it.tags)
@@ -617,7 +622,7 @@
       });
       card.appendChild(tagsWrap);
 
-      // 如果是隱藏（visible:false）並且已登入，顯示紅字提醒
+      // 管理員模式下，如果是 hidden，顯示紅字提醒
       if(isLoggedIn() && it.visible === false){
         const hiddenNote = document.createElement('div');
         hiddenNote.style.fontSize = '12px';
@@ -627,12 +632,11 @@
         card.appendChild(hiddenNote);
       }
 
-      // ===== Admin controls in each card =====
+      // 管理員控制列
       if(isLoggedIn()){
         const ctrl = document.createElement('div');
         ctrl.className = 'admin-controls';
 
-        // 切換顯示狀態按鈕
         const toggleBtn = document.createElement('button');
         toggleBtn.textContent = (it.visible === false) ? '取消隱藏' : '隱藏';
         toggleBtn.addEventListener('click', ()=>{
@@ -640,7 +644,6 @@
         });
         ctrl.appendChild(toggleBtn);
 
-        // 刪除按鈕
         const delBtn = document.createElement('button');
         delBtn.className = 'danger';
         delBtn.textContent = '刪除';
@@ -653,7 +656,7 @@
       listEl.appendChild(card);
     }
 
-    // 分頁控制
+    // 分頁 UI
     const pager = document.getElementById('pager');
     pager.hidden = (totalPages <= 1);
     document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages}`;
@@ -674,7 +677,7 @@
     };
   }
 
-  // ===== page lifecycle =====
+  // ===== lifecycle =====
 
   async function load(){
     try {
