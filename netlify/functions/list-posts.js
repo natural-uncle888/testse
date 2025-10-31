@@ -2,12 +2,14 @@
 import { v2 as cloudinary } from 'cloudinary';
 import crypto from 'crypto';
 
+// --- Cloudinary 設定（用 Netlify 環境變數）---
 cloudinary.config({
   cloud_name: process.env.CLD_CLOUD_NAME,
   api_key: process.env.CLD_API_KEY,
   api_secret: process.env.CLD_API_SECRET,
 });
 
+// --- CORS ---
 const CORS_HEADERS = {
   'content-type': 'application/json',
   'access-control-allow-origin': '*',
@@ -16,11 +18,17 @@ const CORS_HEADERS = {
 };
 
 function sendJSON(data, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: CORS_HEADERS });
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: CORS_HEADERS,
+  });
 }
 
 function preflight() {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
 }
 
 function errorJSON(err, status = 500) {
@@ -28,14 +36,16 @@ function errorJSON(err, status = 500) {
     (err && (err.message || err.error?.message)) ||
     String(err) ||
     'Unknown error';
-  try { console.error('[list-posts] error:', err); } catch {}
+  try {
+    console.error('[list-posts] error:', err);
+  } catch {}
   return new Response(JSON.stringify({ error: msg }), {
     status,
     headers: CORS_HEADERS,
   });
 }
 
-// ===== JWT 驗證 (和 create-post.js 同邏輯，用 ADMIN_JWT_SECRET 做 HS256) =====
+// --- JWT 驗證：跟 create-post.js 同一套 HS256，用 ADMIN_JWT_SECRET ---
 function base64urlDecodeToJson(str) {
   const pad = str.length % 4 === 2 ? '==' : str.length % 4 === 3 ? '=' : '';
   const s = str.replace(/-/g, '+').replace(/_/g, '/') + pad;
@@ -62,10 +72,8 @@ function verifyJWT(token, secret) {
 
     const payload = base64urlDecodeToJson(p);
 
-    // 過期時間 (exp 是秒)
-    if (payload.exp && Date.now() >= payload.exp * 1000) {
-      return null;
-    }
+    // 檢查過期 (exp 單位是秒)
+    if (payload.exp && Date.now() >= payload.exp * 1000) return null;
 
     return payload;
   } catch {
@@ -74,8 +82,8 @@ function verifyJWT(token, secret) {
 }
 
 function requireAdmin(request) {
-  const auth = request.headers.get('authorization') || '';
-  const m = auth.match(/^Bearer\s+(.+)$/i);
+  const authHeader = request.headers.get('authorization') || '';
+  const m = authHeader.match(/^Bearer\s+(.+)$/i);
   if (!m) return null;
 
   const secret = process.env.ADMIN_JWT_SECRET || '';
@@ -88,9 +96,9 @@ function requireAdmin(request) {
   return payload;
 }
 
-// ===== Handler =====
+// --- 主 handler ---
 export default async (request) => {
-  // CORS
+  // CORS 預檢
   if (request.method === 'OPTIONS') return preflight();
   if (request.method !== 'GET') {
     return sendJSON({ error: 'Method not allowed' }, 405);
@@ -100,31 +108,39 @@ export default async (request) => {
     const url = new URL(request.url);
     const showHidden = url.searchParams.get('showHidden') === '1';
 
-    // 如果要顯示隱藏作品，必須是管理員
+    // 如果要看隱藏作品，就必須是管理員
     if (showHidden && !requireAdmin(request)) {
       return sendJSON({ error: 'Unauthorized' }, 401);
     }
 
     const cloud = process.env.CLD_CLOUD_NAME;
+
+    // 我們要做的事：
+    // 1. 列出所有 resource_type=raw 的檔案，prefix='collages/'
+    // 2. 把 public_id 長得像 "collages/<slug>/data" 的挑出來
+    // 3. 對每個 slug 去抓 data.json 真正內容
     const items = [];
     let nextCursor;
 
-    // 🔥 關鍵修正點：
-    // 用 public_id:collages/*/data 來抓所有子資料夾底下的 data.json (resource_type=raw)
     do {
-      const res = await cloudinary.search
-        .expression('resource_type:raw AND public_id:collages/*/data')
-        .max_results(100)
-        .next_cursor(nextCursor)
-        .execute();
+      // 這是 Cloudinary Admin API
+      // 這裡不用 search expression，而是用 prefix='collages/'
+      const res = await cloudinary.api.resources({
+        resource_type: 'raw',
+        type: 'upload',
+        prefix: 'collages/',
+        max_results: 100,
+        next_cursor: nextCursor,
+      });
 
       for (const r of res.resources || []) {
-        // r.public_id 會像 "collages/case-907375/data"
-        const m = /^collages\/([^/]+)\/data$/.exec(r.public_id || '');
-        if (!m) continue;
-        const slug = m[1];
+        // 例：r.public_id = "collages/case-907375/data"
+        const match = /^collages\/([^/]+)\/data$/.exec(r.public_id || '');
+        if (!match) continue;
 
-        // 撈回實際的 data.json 內容
+        const slug = match[1];
+
+        // 讀回對應的 data.json
         const dataUrl = `https://res.cloudinary.com/${cloud}/raw/upload/collages/${encodeURIComponent(
           slug
         )}/data.json`;
@@ -135,18 +151,15 @@ export default async (request) => {
         const data = await resp.json().catch(() => null);
         if (!data) continue;
 
-        // 舊資料可能沒 visible，當成 true
+        // 舊資料可能沒有 visible 欄位，預設為 true
         const isVisible = data.visible !== false;
 
-        // 如果不是 showHidden 模式，而且作品是隱藏的，就跳過
-        if (!showHidden && !isVisible) {
-          continue;
-        }
+        // 如果不是 showHidden，且這筆是隱藏的，就跳過
+        if (!showHidden && !isVisible) continue;
 
-        // 準備回前端顯示的內容
         items.push({
           slug,
-          title: data.title || '',
+          title: data.title || data.titile || '', // 兼容你那筆 typo "titile"
           date: data.date || data.created_at || '',
           tags: data.tags || [],
           items: data.items || [],
@@ -163,15 +176,15 @@ export default async (request) => {
       nextCursor = res.next_cursor || undefined;
     } while (nextCursor);
 
-    // 最新在前
+    // 依時間新到舊排序
     items.sort(
       (a, b) =>
         new Date(b.date || b.created_at || 0) -
         new Date(a.date || a.created_at || 0)
     );
 
-    return sendJSON({ items });
-  } catch (e) {
-    return errorJSON(e, 500);
+    return sendJSON({ items }, 200);
+  } catch (err) {
+    return errorJSON(err, 500);
   }
 };
