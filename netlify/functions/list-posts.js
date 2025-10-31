@@ -27,15 +27,14 @@ function errorJSON(err, status = 500) {
 
 export default async (request) => {
   try {
-    // 確認 Cloudinary 環境變數
     if (!process.env.CLD_CLOUD_NAME || !process.env.CLD_API_KEY || !process.env.CLD_API_SECRET) {
-      return errorJSON('Missing Cloudinary env vars (CLD_CLOUD_NAME / CLD_API_KEY / CLD_API_SECRET)', 500);
+      return errorJSON('Missing Cloudinary env vars', 500);
     }
 
-    const items = [];
-    let nextCursor = undefined;
+    // 第一步：列出 collages/ 底下所有 raw 檔案（分頁抓完）
+    const rawResources = [];
+    let nextCursor;
 
-    // 逐頁列出 collages/ 底下全部 raw 檔
     do {
       const res = await cloudinary.api.resources({
         resource_type: 'raw',
@@ -45,52 +44,68 @@ export default async (request) => {
         next_cursor: nextCursor,
       });
 
-      const resources = res.resources || [];
-      for (const r of resources) {
-        const pid = r.public_id || '';
-        // 只吃 collages/{slug}/data 或 collages/{slug}/data.json
-        const m = /^collages\/([^/]+)\/data(?:\.json)?$/i.exec(pid);
-        if (!m) continue;
-        const slug = m[1];
-
-        // 把這個 slug 的 data.json 抓回來
-        const hasExt = /\.json$/i.test(pid);
-        const cloud = process.env.CLD_CLOUD_NAME;
-        const url = `https://res.cloudinary.com/${cloud}/raw/upload/${encodeURIComponent(pid + (hasExt ? '' : '.json'))}`;
-
-        const resp = await fetch(url);
-        if (!resp.ok) continue;
-        const data = await resp.json().catch(() => null);
-        if (!data) continue;
-
-        // 取得封面圖：盡可能給前端一個 thumb
-        const derivedPreview =
-          data.preview ||          // 新格式
-          data.cover ||            // 舊格式常用 cover
-          (Array.isArray(data.items) && data.items[0]?.url) || // 有 items[] 的話
-          null;
-
-        items.push({
-          slug,
-          title: data.title || data.titile || slug, // 兼容舊資料打錯 key 'titile'
-          date: data.date || data.created_at,
-          created_at: data.created_at,
-          tags: data.tags || [],
-          items: Array.isArray(data.items) ? data.items : [],
-          visible: data.visible !== false, // 沒寫就當作 true
-          preview: derivedPreview,         // 前端會用這個畫縮圖
-        });
-      }
-
+      rawResources.push(...(res.resources || []));
       nextCursor = res.next_cursor || undefined;
     } while (nextCursor);
 
-    // 依日期排序（新到舊）
-    items.sort(
-      (a,b) =>
-        new Date(b.date || b.created_at || 0) -
-        new Date(a.date || a.created_at || 0)
+    // 第二步：從 rawResources 抽出「確實是作品的 data 檔」 -> 得到 slug 清單
+    // 會長成 [{ slug, publicIdFull }, ...]
+    const targets = [];
+    for (const r of rawResources) {
+      const pid = r.public_id || '';
+      const m = /^collages\/([^/]+)\/data(?:\.json)?$/i.exec(pid);
+      if (!m) continue;
+      const slug = m[1];
+      const hasExt = /\.json$/i.test(pid);
+      const cloud = process.env.CLD_CLOUD_NAME;
+
+      const dataUrl = `https://res.cloudinary.com/${cloud}/raw/upload/${encodeURIComponent(
+        pid + (hasExt ? '' : '.json')
+      )}`;
+
+      targets.push({ slug, dataUrl });
+    }
+
+    // 第三步：平行發請求去抓所有 data.json
+    const results = await Promise.all(
+      targets.map(async ({ slug, dataUrl }) => {
+        try {
+          const resp = await fetch(dataUrl);
+          if (!resp.ok) return null;
+          const data = await resp.json().catch(() => null);
+          if (!data) return null;
+
+          // 統一出 front-end 需要的欄位
+          const previewUrl =
+            data.preview ||
+            data.cover ||
+            (Array.isArray(data.items) && data.items[0]?.url) ||
+            null;
+
+          return {
+            slug,
+            title: data.title || data.titile || slug,
+            date: data.date || data.created_at,
+            created_at: data.created_at,
+            tags: data.tags || [],
+            items: Array.isArray(data.items) ? data.items : [],
+            visible: data.visible !== false,
+            preview: previewUrl,
+          };
+        } catch (_err) {
+          return null;
+        }
+      })
     );
+
+    // 第四步：把 null 過濾掉並排序
+    const items = results
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          new Date(b.date || b.created_at || 0) -
+          new Date(a.date || a.created_at || 0)
+      );
 
     return json({ items });
   } catch (e) {
