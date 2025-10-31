@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
+<meta content="#0f172a" name="theme-color"/>
+<title>清洗前後拼貼照片分享</title>
+<link href="logo.png" rel="icon" type="image/png"/>
+<meta content="上傳清洗前後拼貼照片，加入說明、拖曳排序，並一鍵產生分享連結與 ZIP 下載。" name="description">
+<!-- ✅ 新增 favicon -->
+<link href="https://res.cloudinary.com/dijzndzw2/image/upload/c_scale,w_180/v1757176751/logo-3_hddq08.png" rel="apple-touch-icon" sizes="180x180"/>
+<link href="https://res.cloudinary.com/dijzndzw2/image/upload/v1757176751/logo-3_hddq08.png" rel="shortcut icon"/>
+<!-- ✅ favicon 結束 -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer="" src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<style>
+    :root { color-scheme: light dark; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; padding:0.75rem 1rem; border-radius: 1rem; border:1px solid rgba(100,116,139,.5); font-weight:600; }
+    .btn-primary { background:#0f172a; color:#fff; border-color:transparent; box-shadow:0 10px 24px rgba(15,23,42,.15); }
+    .btn-ghost { background:rgba(255,255,255,.6); border-color:rgba(148,163,184,.5); }
+    .input { width:100%; border-radius:0.75rem; border:1px solid rgba(100,116,139,.6); padding:0.75rem 1rem; background:rgba(255,255,255,.75); }
+    .card { border:1px solid rgba(100,116,139,.3); background:rgba(255,255,255,.75); border-radius:1.25rem; box-shadow:0 6px 24px rgba(15,23,42,.06); }
+    .row { display:flex; gap:12px; align-items:center; padding:12px; border:1px dashed rgba(100,116,139,.35); border-radius:1rem; background:rgba(255,255,255,.6); position:relative; }
+    .handle { cursor:grab; padding:6px 8px; border-radius:10px; background:#e2e8f0; color:#334155; user-select:none; touch-action:none; }
+    .thumb { width:80px; height:80px; border-radius:12px; overflow:hidden; background:#e2e8f0; flex:none; display:flex; align-items:center; justify-content:center; font-size:12px; color:#64748b; }
+    .progress { height:8px; background:rgba(148,163,184,.35); border-radius:9999px; overflow:hidden; }
+    .bar { height:100%; width:0; background:#0f172a; transition:width .25s ease; }
+    .chip { font-size:12px; padding:4px 10px; border-radius:9999px; background:#f1f5f9; color:#334155; }
+    .tap { min-height:44px; min-width:44px; }
+    /* Lightbox */
+    .lightbox { position:fixed; inset:0; background:rgba(0,0,0,.9); display:none; align-items:center; justify-content:center; z-index:60; padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 72px); }
+    .lightbox.open { display:flex; }
+    .lightbox img { max-width:92vw; max-height:72vh; border-radius:16px; }
+    .lightbox .caption { color:#e2e8f0; margin-top:12px; text-align:center; font-size:18px; line-height:1.5; }
+    .lightbox .close { position:absolute; top:16px; right:16px; color:#e2e8f0; font-size:26px; }
+    /* bottom controls so arrows won't block photo */
+    .lb-controls { position:absolute; left:0; right:0; bottom:16px; display:flex; align-items:center; justify-content:center; gap:16px; pointer-events:none; }
+    .lb-controls .navBtn { pointer-events:auto; font-size:20px; color:#fff; width:56px; height:56px; display:flex; align-items:center; justify-content:center; border-radius:9999px; background:rgba(17,24,39,.6); border:1px solid rgba(255,255,255,.2); backdrop-filter: blur(6px); }
+  </style>
+<style>
+@media (prefers-reduced-motion: reduce){
+  * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+</style>
+</meta><style>
+/* Auto-injected: toggle date visibility via URL param */
+.work-date{display:none;}
+.show-dates .work-date{display:inline;}
+</style><style>
+/* Auto-injected v2: robust toggle for date visibility */
+.work-date{display:none !important;}
+.show-dates .work-date{display:inline !important;}
+/* Also hide generic <time> with datetime if not explicitly opted-in */
+time[datetime].work-date{display:none !important;}
+.show-dates time[datetime].work-date{display:inline !important;}
+</style></head>
+<body class="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 text-slate-900">
+<header class="sticky top-0 z-30 backdrop-blur bg-white/80 border-b border-slate-200/60">
+<div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+<img alt="logo1" class="h-16 w-16 rounded-xl object-contain" decoding="async" loading="lazy" src="logo1.png"/>
+<div class="leading-tight">
+<div class="font-semibold">自然大叔 Natural Uncle</div>
+<div class="text-[12px] text-slate-500">清洗前後拼貼照片分享</div>
+</div>
+</div>
+</header>
+<main class="max-w-3xl mx-auto px-4 py-6">
+<section class="card p-5" id="editor">
+<h1 class="text-xl font-bold mb-4">建立分享</h1>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div><label class="block text-sm mb-1 text-slate-600">案件/地點</label><input class="input" id="title" placeholder="例如：台北王小姐"/></div>
+<div><label class="block text-sm mb-1 text-slate-600">服務日期</label><input class="input" id="date" type="date"/></div>
+</div>
+<div class="mt-4">
+<label class="block text-sm mb-2 text-slate-600">照片清單（可拖曳排序）</label>
+<div class="space-y-3" id="items"></div>
+<div class="flex flex-wrap gap-2 mt-2">
+<button class="btn btn-ghost tap" id="addItem">＋ 新增一張</button>
+<label class="btn btn-ghost tap cursor-pointer">
+            相簿選取多張
+            <input accept="image/*" class="hidden" id="multiPick" multiple="" type="file"/>
+</label>
+</div>
+<p class="text-xs text-slate-500 mt-2">支援 JPG/PNG，單檔 ≤ 10MB。拖曳左側「⋮⋮」手把調整順序。</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+<div><label class="block text-sm mb-1 text-slate-600">標籤（選填）</label><input class="input" id="tags" placeholder="以逗號分隔，例如：冷氣, 住家"/></div>
+<div><label class="block text-sm mb-1 text-slate-600">自訂網址代稱（選填）</label><input class="input" id="slug" placeholder="例如：wang-2025-09"/></div>
+</div>
+<div class="mt-5 flex items-center gap-3">
+<button class="btn btn-primary tap" id="upload">上傳全部並產生連結</button>
+<div class="grow progress"><div class="bar" id="bar"></div></div>
+<span class="text-sm text-slate-600 min-w-[5rem]" id="progress"></span>
+</div>
+</section>
+<section class="hidden" id="viewer">
+<article class="card overflow-hidden">
+<div class="p-5 border-b border-slate-200/60">
+<div class="flex items-start gap-3">
+<div class="grow">
+<h2 class="text-xl md:text-2xl font-semibold" id="v-title"></h2>
+<p class="text-sm text-slate-600 mt-1"><span id="v-date"></span></p>
+<div class="flex flex-wrap gap-2 mt-2" id="v-tags"></div>
+</div>
+<a class="btn btn-ghost tap" id="downloadZip" rel="noopener" target="_blank">下載全部（ZIP）</a>
+</div>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4" id="gallery"></div>
+<div class="hidden px-5 pb-4" id="share-link">
+<div class="card p-4 flex flex-col md:flex-row md:items-center gap-3">
+<input class="input md:flex-1" id="share-url" readonly=""/>
+<button class="btn btn-primary tap md:w-auto w-full" id="copy-link">複製連結</button>
+</div>
+</div>
+<div class="p-5 border-t border-slate-200/60 text-center">
+<img alt="公司Logo" class="mx-auto mb-3 max-h-16" decoding="async" loading="lazy" src="logo.png"/>
+<p class="text-sm font-semibold">自然大叔 Natural Uncle 專業清淨職人</p>
+<p class="text-sm mt-1">聯絡電話：<a class="text-blue-600" href="tel:0912356331">0912-356-331</a></p>
+</div>
+</article>
+</section>
+</main>
+<!-- Lightbox with bottom controls -->
+<div aria-label="圖片放大檢視" aria-modal="true" class="lightbox" id="lightbox" role="dialog">
+<button aria-label="關閉" class="close">✕</button>
+<div class="content text-center">
+<img alt="放大圖片" decoding="async" id="lb-img" loading="lazy"/>
+<div class="caption" id="lb-cap"></div>
+</div>
+<div class="lb-controls">
+<button aria-label="上一張" class="navBtn navPrev">❮</button>
+<button aria-label="下一張" class="navBtn navNext">❯</button>
+</div>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const CLOUD_NAME="dvz4druzc";
+    const UPLOAD_PRESET="uncle-collage";
+    const MAX_MB=10;
+    const $=(s,r=document)=>r.querySelector(s);
+    const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+    const setProgress=m=>$('#progress').textContent=m||'';
+    const setBar=p=>$('#bar').style.width=Math.max(0,Math.min(100,p))+'%';
+    const slugify=s=>String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+
+    function transform(url, opts){
+      if(!url) return url;
+      const i=url.indexOf('/upload/');
+      if(i<0) return url;
+      const inject = opts || 'f_auto,q_auto';
+      return url.slice(0,i+8)+inject+'/'+url.slice(i+8);
+    }
+    const galleryUrl = (u)=> transform(u, 'f_auto,q_auto,c_limit,w_900');
+    const lightboxUrl = (u)=> transform(u, 'f_auto,q_auto,c_limit,w_1600');
+
+    function initRowControls(row){
+      const floorSel = row.querySelector('.floor-select');
+      const floorCustom = row.querySelector('.floor-custom');
+      const placeSel = row.querySelector('.place-select');
+      const placeCustom = row.querySelector('.place-custom');
+      const typeSel = row.querySelector('.type-select');
+      const typeCustom = row.querySelector('.type-custom');
+      function toggle(sel, custom, triggerValue){
+        if(sel.value === triggerValue){
+          custom.classList.remove('hidden');
+          custom.focus();
+        }else{
+          custom.classList.add('hidden');
+          custom.value = '';
+        }
+      }
+      floorSel.addEventListener('change', ()=>toggle(floorSel, floorCustom, 'custom-floor'));
+      placeSel.addEventListener('change', ()=>toggle(placeSel, placeCustom, 'custom-place'));
+      typeSel.addEventListener('change', ()=>toggle(typeSel, typeCustom, 'custom-type'));
+    }
+    
+    function getRowCaption(row, sep='-'){
+      const floorSel = row.querySelector('.floor-select');
+      const floorCustom = row.querySelector('.floor-custom');
+      const placeSel = row.querySelector('.place-select');
+      const placeCustom = row.querySelector('.place-custom');
+      const typeSel = row.querySelector('.type-select');
+      const typeCustom = row.querySelector('.type-custom');
+      const floor = (floorSel.value === 'custom-floor' ? (floorCustom.value||'') : (floorSel.value||'')).trim();
+      const place = (placeSel.value === 'custom-place' ? (placeCustom.value||'') : (placeSel.value||'')).trim();
+      const ctype = (typeSel.value === 'custom-type' ? (typeCustom.value||'') : (typeSel.value||'')).trim();
+      const parts = [];
+      if(floor) parts.push(floor);
+      if(place) parts.push(place);
+      if(ctype) parts.push(ctype);
+      return parts.join(sep);
+    }
+
+
+
+    function addItemRow(file){
+      const itemsBox = $('#items');
+      const row=document.createElement('div');
+      row.className='row';
+      row.innerHTML=`
+        <div class="handle" title="拖曳調整順序">⋮⋮</div>
+        <div class="thumb">預覽</div>
+        <div class="flex-1">
+<div class="grid gap-2">
+  <input type="file" accept="image/*" class="input p-2" aria-label="選擇圖片" />
+
+  <div class="grid md:grid-cols-3 gap-2">
+    <div>
+      <label class="block text-xs mb-1 text-slate-600">樓層</label>
+      <select class="input floor-select">
+        <option value="" disabled selected>請選擇樓層</option>
+        <option>1F</option>
+        <option>2F</option>
+        <option>3F</option>
+        <option>4F</option>
+        <option>5F</option>
+        <option value="custom-floor">5F以上（手動輸入）</option>
+      </select>
+      <input class="input mt-1 floor-custom hidden" placeholder="請輸入樓層（例如：6F、7F…）" />
+    </div>
+    <div>
+      <label class="block text-xs mb-1 text-slate-600">所在類型</label>
+      <select class="input place-select">
+        <option value="" disabled selected>請選擇所在類型</option>
+        <option>客廳</option>
+        <option>房間</option>
+        <option>廚房</option>
+        <option value="custom-place">其他（手動輸入）</option>
+      </select>
+      <input class="input mt-1 place-custom hidden" placeholder="請輸入所在類型" />
+    </div>
+    <div>
+      <label class="block text-xs mb-1 text-slate-600">清洗類別</label>
+      <select class="input type-select">
+        <option value="" disabled selected>請選擇清洗類別</option>
+        <option>分離式冷氣室內機</option>
+        <option>吊隱式冷氣室內機</option>
+        <option>直立式洗衣機</option>
+        <option>水塔</option>
+        <option value="custom-type">其他（手動輸入）</option>
+      </select>
+      <input class="input mt-1 type-custom hidden" placeholder="請輸入清洗類別" />
+    </div>
+  </div>
+</div>
+</div>
+        <button class="btn btn-ghost tap remove">刪除</button>`;
+      itemsBox.appendChild(row);
+
+      const fileInput=$('input[type=file]',row);
+      const thumb=$('.thumb',row);
+      initRowControls(row);
+
+      function setPreviewFromFile(f){
+        const fr=new FileReader();
+        fr.onload=()=>{ thumb.innerHTML='<img decoding="async" loading="lazy" alt="預覽" class="w-full h-full object-cover" src="'+fr.result+'"/>'; };
+        fr.readAsDataURL(f);
+      }
+      $('.remove',row).addEventListener('click',()=>row.remove());
+      fileInput.addEventListener('change',()=>{
+        const f=fileInput.files[0]; if(!f) return;
+        if(f.size>MAX_MB*1024*1024){ alert('圖片超過 '+MAX_MB+'MB'); fileInput.value=''; return; }
+        row._file = f;
+        setPreviewFromFile(f);
+      });
+
+      if (file) {
+        try {
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          fileInput.files = dt.files;
+          fileInput.dispatchEvent(new Event('change'));
+        } catch {
+          row._file = file;
+          setPreviewFromFile(file);
+        }
+      }
+    }
+
+    $('#addItem').addEventListener('click',()=> addItemRow());
+    $('#multiPick').addEventListener('change',e=>{
+      const files=Array.from(e.target.files||[]);
+      files.forEach(f=> addItemRow(f));
+      e.target.value='';
+    });
+    addItemRow();
+
+    if (window.Sortable) {
+      new Sortable($('#items'),{
+        animation:150, handle:'.handle',
+        onStart:e=>e.item.classList.add('opacity-70'),
+        onEnd:  e=>e.item.classList.remove('opacity-70')
+      });
+    }
+
+    async function uploadToCloudinary(file,folder){
+      const fd=new FormData();
+      fd.append('file',file);
+      fd.append('upload_preset',UPLOAD_PRESET);
+      fd.append('folder',folder);
+      const res=await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,{method:'POST',body:fd});
+      const j=await res.json().catch(()=>({}));
+      if(!res.ok||!j.secure_url) throw new Error(j.error?.message||'Cloudinary upload failed');
+      return j.secure_url;
+    }
+
+    $('#upload').addEventListener('click', async ()=>{
+      const title=$('#title').value.trim();
+      const date=$('#date').value;
+      const tags=$('#tags').value.trim();
+      let slug=$('#slug').value.trim();
+      const rows=$$('#items>.row');
+      if(!rows.length) return alert('請至少新增一張');
+      if(!slug) slug=slugify((title||'case')+'-'+Date.now().toString().slice(-6));
+
+      try{
+        setBar(0); setProgress('準備上傳…');
+        const folder=`collages/${slug}`;
+        const items=[]; let done=0;
+
+        for (const row of rows){
+          const f = $('input[type=file]',row)?.files?.[0] || row._file;
+          const caption = getRowCaption(row);
+          if(!f){ alert('有一列未選圖片'); return; }
+          if(f.size>MAX_MB*1024*1024) { alert('有圖片超過 '+MAX_MB+'MB'); return; }
+          setProgress(`上傳中… ${done+1} / ${rows.length}`);
+          const url = await uploadToCloudinary(f, folder);
+          items.push({ url, caption });
+          done++; setBar(done/rows.length*100);
+        }
+
+        setProgress('儲存資料…');
+        const adminToken = localStorage.getItem('adminToken') || '';
+        if (!adminToken) {
+           alert('請先登入管理員（到作品清單頁登入後再回來即可）');
+           return;
+        }
+
+        const resp = await fetch('/.netlify/functions/create-post',{
+           method:'POST',
+           headers:{
+              'Content-Type':'application/json',
+              'Authorization':'Bearer ' + adminToken
+           },
+           body: JSON.stringify({ title, date, tags, slug, items })
+        });
+        const txt = await resp.text();
+        let data; try{ data = JSON.parse(txt); }catch{ data = { error: txt }; }
+        if(!resp.ok || !data.ok) throw new Error(data.error || '建立失敗');
+
+        const shareUrl = location.origin + location.pathname + '#/v/' + encodeURIComponent(data.slug);
+        $('#share-url').value = shareUrl;
+        $('#share-link').classList.remove('hidden');
+        $('#copy-link').onclick = ()=> navigator.clipboard.writeText(shareUrl).then(()=> alert('已複製連結！'));
+        sessionStorage.setItem('justCreated','1');
+
+        location.hash = '#/v/' + encodeURIComponent(data.slug);
+        setProgress('完成！');
+      }catch(e){
+        setProgress(''); setBar(0);
+        alert('建立失敗：' + (e.message || e));
+      }
+    });
+
+    // ===== Viewer with Lightbox navigation =====
+    let lbIndex = 0;
+    let lbItems = []; // {full, caption}
+
+    function openLightbox(idx){
+      if (!lbItems.length) return;
+      lbIndex = (idx+lbItems.length)%lbItems.length;
+      const it = lbItems[lbIndex];
+      $('#lb-img').src = it.full;
+      $('#lb-cap').textContent = it.caption || '';
+      $('#lightbox').classList.add('open');
+    }
+    function closeLightbox(){
+      $('#lightbox').classList.remove('open');
+      $('#lb-img').src = '';
+    }
+    function next(){ openLightbox(lbIndex+1); }
+    function prev(){ openLightbox(lbIndex-1); }
+
+    /* swipe navigation removed */
+async function loadPost(slug){
+      try{
+        const r=await fetch('/.netlify/functions/get-post?slug='+encodeURIComponent(slug));
+        const t=await r.text(); let d; try{ d=JSON.parse(t); }catch{ throw new Error(t); }
+        if(d.error) throw new Error(d.error);
+
+        $('#editor').classList.add('hidden');
+        $('#viewer').classList.remove('hidden');
+        $('#v-title').textContent=d.title||'未命名案件';
+        $('#v-date').textContent=d.date? new Date(d.date).toLocaleDateString() : '';
+        const tagsBox=$('#v-tags'); tagsBox.innerHTML='';
+        (d.tags||'').split(',').map(x=>x.trim()).filter(Boolean).forEach(t=>{
+          const s=document.createElement('span'); s.className='chip'; s.textContent='#'+t; tagsBox.appendChild(s);
+        });
+
+        const g=$('#gallery'); g.innerHTML='';
+        lbItems = [];
+        (d.items||[]).forEach((it,i)=>{
+          const full = lightboxUrl(it.url||'');
+          const thumb = galleryUrl(it.url||'');
+          const caption = it.caption || ('照片 '+(i+1));
+          lbItems.push({ full, caption });
+          const card=document.createElement('div'); card.className='card overflow-hidden';
+          card.innerHTML=`
+            <button class="w-full group" data-idx="${i}">
+              <img decoding="async" src="${thumb}" class="w-full h-auto object-contain" loading="lazy" alt="照片 ${i+1}"/>
+            </button>
+            <div class="p-3 text-base text-slate-700">${caption}</div>`;
+          g.appendChild(card);
+        });
+
+        $$('#gallery button').forEach(btn=>{
+          btn.addEventListener('click', ()=> openLightbox(parseInt(btn.dataset.idx,10) || 0), {passive:true});
+        });
+
+        $('#downloadZip').href='/.netlify/functions/zip-images?slug='+encodeURIComponent(slug);
+
+        const just = sessionStorage.getItem('justCreated') === '1';
+        const shareUrl = location.origin + location.pathname + '#/v/' + encodeURIComponent(slug);
+        if (just) {
+          $('#share-url').value = shareUrl;
+          $('#share-link').classList.remove('hidden');
+          $('#copy-link').onclick = ()=> navigator.clipboard.writeText(shareUrl).then(()=> alert('已複製連結！'));
+          sessionStorage.removeItem('justCreated');
+        } else {
+          $('#share-link').classList.add('hidden');
+        }
+      }catch(e){
+        alert('讀取失敗：' + (e.message || e));
+      }
+    }
+
+    (function initLightbox(){
+      const lb = $('#lightbox');
+      $('.close', lb).addEventListener('click', closeLightbox);
+      $('.navNext', lb).addEventListener('click', next);
+      $('.navPrev', lb).addEventListener('click', prev);
+      lb.addEventListener('click', (e)=>{ if(e.target===lb) closeLightbox(); });
+      document.addEventListener('keydown', (e)=>{
+        if(!lb.classList.contains('open')) return;
+        if(e.key==='Escape') closeLightbox();
+        if(e.key==='ArrowRight') next();
+        if(e.key==='ArrowLeft') prev();
+      });
+    })();
+
+    function route(){
+      const h=location.hash||'#/new';
+      if (h.startsWith('#/v/')) loadPost(decodeURIComponent(h.replace('#/v/','')));
+      else { $('#viewer').classList.add('hidden'); $('#editor').classList.remove('hidden'); }
+    }
+    window.addEventListener('hashchange', route, { passive: true }); route();
+  });
+  </script>
+<script>
+/* Auto-injected: add .show-dates on ?showDates=1 */
+(function(){
+  try{
+    var params = new URLSearchParams(location.search);
+    if (params.get('showDates') === '1') {
+      document.body && document.body.classList.add('show-dates');
+    }
+  }catch(e){}
+})();
+</script><script>
+/* Auto-injected v2: robust date toggling and runtime classification */
+(function(){
+  try{
+    var params = new URLSearchParams(location.search);
+    if (params.get('showDates') === '1') {
+      document.body && document.body.classList.add('show-dates');
+    }
+  }catch(e){}
+
+  function isTextNode(n){ return n && n.nodeType === Node.TEXT_NODE; }
+
+  var dateRe = /\b(20\d{2}|19\d{2})([-\/.])(0?[1-9]|1[0-2])\2(0?[1-9]|[12]\d|3[01])\b/;
+
+  function shouldSkip(el){
+    if(!el) return true;
+    var name = (el.nodeName||'').toLowerCase();
+    if (['script','style','noscript','code','pre'].indexOf(name) >= 0) return true;
+    return false;
+  }
+
+  function wrapTextNode(node){
+    var text = node.nodeValue;
+    var m = dateRe.exec(text);
+    if(!m) return false;
+    var y=m[1], sep=m[2], mm=m[3], dd=m[4];
+    var start = m.index;
+    var end = start + m[0].length;
+    var before = text.slice(0, start);
+    var match = text.slice(start, end);
+    var after = text.slice(end);
+
+    var span = document.createElement('time');
+    span.className = 'work-date';
+    var to2 = function(n){ n = parseInt(n,10); return (n<10?'0':'')+n; };
+    span.setAttribute('datetime', y+'-'+to2(mm)+'-'+to2(dd));
+    span.textContent = match;
+
+    var frag = document.createDocumentFragment();
+    if(before) frag.appendChild(document.createTextNode(before));
+    frag.appendChild(span);
+    if(after) frag.appendChild(document.createTextNode(after));
+
+    node.parentNode.replaceChild(frag, node);
+    return true;
+  }
+
+  function markKnownDateElems(){
+    var selectors = ['.date', '.post-date', '.work .date', '[data-date]', '[itemprop="datePublished"]', 'time[datetime]'];
+    try {
+      document.querySelectorAll(selectors.join(',')).forEach(function(el){
+        if(!el.classList.contains('work-date')) el.classList.add('work-date');
+      });
+    } catch(e){}
+  }
+
+  function scanAndWrap(root){
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: function(node){
+        var p = node.parentNode;
+        if(!p || shouldSkip(p)) return NodeFilter.FILTER_REJECT;
+        if((p.closest && p.closest('.work-date')) || (p.nodeName||'').toLowerCase() === 'time') return NodeFilter.FILTER_REJECT;
+        return dateRe.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      }
+    });
+    var nodes = [];
+    var n;
+    while((n = walker.nextNode())) nodes.push(n);
+    nodes.forEach(wrapTextNode);
+  }
+
+  function init(){
+    if(document.body && !document.body.classList.contains('show-dates')){
+      // hide scenario
+      markKnownDateElems();
+      scanAndWrap(document.body);
+    }
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  // Also observe dynamic inserts
+  try{
+    var mo = new MutationObserver(function(muts){
+      if(!document.body || document.body.classList.contains('show-dates')) return;
+      muts.forEach(function(m){
+        m.addedNodes && m.addedNodes.forEach(function(node){
+          if(node.nodeType === 1){ // element
+            markKnownDateElems();
+            scanAndWrap(node);
+          } else if(node.nodeType === 3){ // text
+            wrapTextNode(node);
+          }
+        });
+      });
+    });
+    mo.observe(document.documentElement, {childList:true, subtree:true});
+  }catch(e){}
+})();
+
+/* Hash-based share page support: show dates on "#/v/<id>" */
+function checkHashForShare(){
+  try{
+    var h = location.hash || '';
+    if (/^#\/v\/\d+/.test(h)) {
+      document.body && document.body.classList.add('show-dates');
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+checkHashForShare();
+window.addEventListener('hashchange', checkHashForShare, false);
+</script></body>
+</html>
