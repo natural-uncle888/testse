@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <!-- favicon -->
+  <!-- ✅ 新增 favicon -->
   <link href="https://res.cloudinary.com/dijzndzw2/image/upload/c_scale,w_180/v1757176751/logo-3_hddq08.png" rel="apple-touch-icon" sizes="180x180"/>
   <link href="https://res.cloudinary.com/dijzndzw2/image/upload/v1757176751/logo-3_hddq08.png" rel="shortcut icon"/>
+  <!-- ✅ favicon 結束 -->
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -160,49 +161,43 @@
       gap:16px;
       margin-top:20px;
     }
-
-    /* 卡片現在不再有整體 padding，讓縮圖可以貼邊 */
     .card{
       background:var(--card);
       border:1px solid var(--border);
       border-radius:var(--radius);
-      overflow:hidden;           /* 讓上半部縮圖的邊角也跟著圓角裁掉 */
+      padding:12px;
       display:flex;
       flex-direction:column;
       min-height:220px;
     }
 
-    /* 縮圖區塊：整個滿版貼邊框，固定高度 */
+    /* ✅ 預覽縮圖區：改成顯示整張圖片，不裁切 */
     .thumb-link{
+      /* 原本是 position:relative + padding-top:62% 來強制固定比例，會搭配 cover 導致裁切。
+         我們改成固定一個展示高度，並讓圖片以原比例縮放完整呈現。 */
+      position:relative;
+      width:100%;
+
+      min-height:240px;                 /* 可依需求調 200~260px，越大越接近原圖比例 */
       display:flex;
       align-items:center;
       justify-content:center;
 
-      width:100%;
-      height:240px;
-
+      border-radius:10px;
+      overflow:hidden;
       background:#f3f4f6;
-      border-bottom:1px solid var(--border);
-      text-decoration:none;
+      border:1px solid var(--border);
+      margin-bottom:10px;
     }
 
-    /* 真正的圖：不裁切，等比例塞進框內 */
     .thumb-img{
-      max-width:100%;
-      max-height:100%;
-      width:auto;
-      height:auto;
-      object-fit:contain;
-      display:block;
-      background:#f3f4f6;
-    }
-
-    /* 下半部的文字和按鈕，才有左右 padding */
-    .card-body{
-      padding:12px;
-      display:flex;
-      flex-direction:column;
-      flex:1;
+      /* 原本是 position:absolute; inset:0; background-size:cover;
+         我們拿掉絕對定位，並用 contain，確保整張圖都出現。 */
+      width:100%;
+      height:100%;
+      background-size:contain;          /* 不裁切，整張塞進來 */
+      background-repeat:no-repeat;
+      background-position:center center;
     }
 
     .card-head{
@@ -247,6 +242,7 @@
       overflow:hidden;
     }
 
+    /* admin controls row in each card */
     .admin-controls{
       margin-top:10px;
       display:flex;
@@ -296,7 +292,6 @@
       color:var(--muted);
       font-size:14px;
     }
-
     @media(max-width:600px){
       .navrow{
         flex-direction:column;
@@ -315,6 +310,7 @@
   <div class="container">
     <div class="navrow">
       <div class="brand">
+        <img src="logo1.png" alt="logo1"/>
         <div>自然大叔｜作品清單</div>
       </div>
 
@@ -533,18 +529,19 @@
     return out;
   }
 
+  // 這邊是給按鈕用的 callback
   async function toggleVisible(slug, currentVisible){
     const wantHide = currentVisible !== false;
-    const nextVisible = !wantHide;
+    const nextVisible = !wantHide; // true -> false (隱藏), false -> true (取消隱藏)
     await apiToggleVisible(slug, nextVisible);
-    await load();
+    await load(); // reload 清單
   }
 
   async function deletePost(slug){
     const ok = confirm(`確定要永久刪除「${slug}」？\n此動作會刪除所有圖片與資料，且無法復原！`);
     if(!ok) return;
     await apiDeletePost(slug);
-    await load();
+    await load(); // reload 清單
   }
 
   function render(items){
@@ -576,23 +573,17 @@
       const card = document.createElement('article');
       card.className = 'card';
 
-      // 縮圖區：現在佔滿卡片寬度，貼邊框，沒有左右白邊
       const thumbLink = document.createElement('a');
       thumbLink.className = 'thumb-link';
       thumbLink.href = detailUrl;
 
+      const thumbImg = document.createElement('div');
+      thumbImg.className = 'thumb-img';
       if (thumbUrl){
-        const imgEl = document.createElement('img');
-        imgEl.className = 'thumb-img';
-        imgEl.src = thumbUrl;
-        imgEl.alt = it.title || it.slug || '';
-        thumbLink.appendChild(imgEl);
+        thumbImg.style.backgroundImage = `url("${thumbUrl}")`;
       }
+      thumbLink.appendChild(thumbImg);
       card.appendChild(thumbLink);
-
-      // 文字、標籤、按鈕包在 card-body，這裡才有 padding
-      const bodyDiv = document.createElement('div');
-      bodyDiv.className = 'card-body';
 
       const head = document.createElement('div');
       head.className = 'card-head';
@@ -609,7 +600,7 @@
 
       head.appendChild(titleA);
       head.appendChild(dateSpan);
-      bodyDiv.appendChild(head);
+      card.appendChild(head);
 
       const tagsWrap = document.createElement('div');
       tagsWrap.className = 'tags';
@@ -624,21 +615,24 @@
         span.textContent = tagText;
         tagsWrap.appendChild(span);
       });
-      bodyDiv.appendChild(tagsWrap);
+      card.appendChild(tagsWrap);
 
+      // 如果是隱藏（visible:false）並且已登入，顯示紅字提醒
       if(isLoggedIn() && it.visible === false){
         const hiddenNote = document.createElement('div');
         hiddenNote.style.fontSize = '12px';
         hiddenNote.style.color = 'crimson';
         hiddenNote.style.marginTop = '6px';
         hiddenNote.textContent = '（已隱藏，不在公開清單顯示）';
-        bodyDiv.appendChild(hiddenNote);
+        card.appendChild(hiddenNote);
       }
 
+      // ===== Admin controls in each card =====
       if(isLoggedIn()){
         const ctrl = document.createElement('div');
         ctrl.className = 'admin-controls';
 
+        // 切換顯示狀態按鈕
         const toggleBtn = document.createElement('button');
         toggleBtn.textContent = (it.visible === false) ? '取消隱藏' : '隱藏';
         toggleBtn.addEventListener('click', ()=>{
@@ -646,19 +640,20 @@
         });
         ctrl.appendChild(toggleBtn);
 
+        // 刪除按鈕
         const delBtn = document.createElement('button');
         delBtn.className = 'danger';
         delBtn.textContent = '刪除';
         delBtn.addEventListener('click', ()=>{ deletePost(slug); });
         ctrl.appendChild(delBtn);
 
-        bodyDiv.appendChild(ctrl);
+        card.appendChild(ctrl);
       }
 
-      card.appendChild(bodyDiv);
       listEl.appendChild(card);
     }
 
+    // 分頁控制
     const pager = document.getElementById('pager');
     pager.hidden = (totalPages <= 1);
     document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages}`;
@@ -678,6 +673,8 @@
       }
     };
   }
+
+  // ===== page lifecycle =====
 
   async function load(){
     try {
